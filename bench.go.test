@@ -1,0 +1,52 @@
+package main
+
+import (
+	"fmt"
+	"math/rand/v2"
+	"time"
+)
+
+const (
+	numEntities = 1000
+	numQueries  = 1000
+	worldSize   = 1000.0
+)
+
+func benchmark() {
+	hshg := NewHSHG()
+
+	for i := 0; i < numEntities; i++ {
+		minX := rand.Float64() * worldSize
+		minY := rand.Float64() * worldSize
+		maxX := minX + rand.Float64()*0.1
+		maxY := minY + rand.Float64()*0.1
+
+		min := [2]float64{minX, minY}
+		max := [2]float64{maxX, maxY}
+
+		hshg.insert(min, max, true)
+	}
+
+	startQuery := time.Now()
+
+	for i := 0; i < numQueries; i++ {
+		hshg.query()
+	}
+
+	queryDuration := time.Since(startQuery)
+
+	startUpdate := time.Now()
+
+	for i := 0; i < numEntities; i++ {
+		hshg.update()
+	}
+
+	updateDuration := time.Since(startUpdate)
+
+	fmt.Printf("Query Duration: %.8f seconds\n", queryDuration.Seconds()/numQueries)
+	fmt.Printf("Update Duration: %.8f seconds\n", updateDuration.Seconds()/numEntities)
+}
+
+func main() {
+	benchmark()
+}
