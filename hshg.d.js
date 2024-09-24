@@ -3,7 +3,7 @@ module.exports = ({toArrayBuffer, JSCallback, ptr}) => ({
     types: {
         insertEntity: {
             args: ['double', 'double', 'double', 'double', 'bool'],
-            returns: 'void',
+            returns: 'int',
         },
         removeEntity: {
             args: ['int'],
@@ -26,7 +26,7 @@ module.exports = ({toArrayBuffer, JSCallback, ptr}) => ({
             returns: 'int',
         },
     },
-    wrapper(symbols) {
+    wrapper({insertEntity, removeEntity, updateHSHG, updateEntity, queryHSHG, getCollisionCount}) {
         const objs = {};
 
         class HSHG {
@@ -36,36 +36,35 @@ module.exports = ({toArrayBuffer, JSCallback, ptr}) => ({
                 if (obj.HSHG_id !== undefined) return;
 
                 const aabb = obj.getAABB();
+                const id = insertEntity(obj.HSHG_id, aabb.min[0], aabb.min[1], aabb.max[0], aabb.max[1], aabb.active);
 
-                obj.HSHG_id = symbols.insertEntity(obj.HSHG_id, aabb.min[0], aabb.min[1], aabb.max[0], aabb.max[1], aabb.active);
-
-                objs[obj.HSHG_id] = obj;
-            }
-
-            checkIfInHSHG(obj) {
-                return obj.HSHG_id !== undefined;
+                objs[id] = obj;
+                obj.HSHG_id = id;
             }
 
             removeObject(obj) {
-                if (obj.HSHG_id === undefined) return;
-                symbols.removeEntity(obj.HSHG_id);
+                const id = obj.HSHG_id;
+                if (id === undefined) return;
 
+                removeEntity(id);
+                delete objs[id];
                 obj.HSHG_id = undefined;
-
-                objs[obj.HSHG_id] = undefined;
             }
 
             update() {
-                symbols.updateHSHG();
+                updateHSHG();
             }
 
             updateAABB(obj, aabb) {
-                if (obj.HSHG_id === undefined) return;
-                symbols.updateEntity(obj.HSHG_id, aabb.min[0], aabb.min[1], aabb.max[0], aabb.max[1], aabb.active);
+                const id = obj.HSHG_id;
+                if (id === undefined) return;
+
+                updateEntity(id, aabb.min[0], aabb.min[1], aabb.max[0], aabb.max[1], aabb.active);
             }
+
             queryForCollisionPairs() {
-                const pairsPtr = symbols.queryHSHG();
-                const count = symbols.getCollisionCount();
+                const pairsPtr = queryHSHG();
+                const count = getCollisionCount();
 
                 if (count === 0) {
                     return [];
@@ -76,7 +75,6 @@ module.exports = ({toArrayBuffer, JSCallback, ptr}) => ({
                 const pairs = new Int32Array(arrayBuffer);
 
                 let possibleCollisions = [];
-
                 for (let i = 0; i < count; i++) {
                     const objA = objs[pairs[i * 2]];
                     const objB = objs[pairs[i * 2 + 1]];

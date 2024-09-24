@@ -84,8 +84,8 @@ type Grid struct {
 	inverseCellSize    float64
 	rowColumnCount     int
 	xyHashMask         int
-	occupiedCells      []Cell
-	allCells           []Cell
+	occupiedCells      []*Cell
+	allCells           []*Cell
 	allObjects         []*Entity
 	sharedInnerOffsets []int
 	id                 int
@@ -101,7 +101,7 @@ func NewGrid(cellSize float64, cellCount int) *Grid {
 		id:              gridCount,
 	}
 	gridCount++
-	grid.allCells = make([]Cell, grid.rowColumnCount*grid.rowColumnCount)
+	grid.allCells = make([]*Cell, grid.rowColumnCount*grid.rowColumnCount)
 	return grid
 }
 
@@ -112,7 +112,7 @@ func (g *Grid) init() {
 	g.sharedInnerOffsets = innerOffsets
 
 	for i := 0; i < gridLength; i++ {
-		cell := Cell{}
+		cell := &Cell{}
 		y := i / wh
 		x := i - y*wh
 
@@ -177,10 +177,10 @@ func (g *Grid) insert(obj *Entity, hash int) {
 
 	obj.grid = g
 
-	targetCell := &g.allCells[hash]
+	targetCell := g.allCells[hash]
 	if len(targetCell.objectContainer) == 0 {
 		targetCell.occupiedCellsIndex = len(g.occupiedCells)
-		g.occupiedCells = append(g.occupiedCells, *targetCell)
+		g.occupiedCells = append(g.occupiedCells, targetCell)
 	}
 	obj.objectContainerIndex = len(targetCell.objectContainer)
 	obj.hash = hash
@@ -218,6 +218,11 @@ func (g *Grid) toHash(x, y float64) int {
 }
 
 func (g *Grid) remove(obj *Entity) {
+	if !checkIfInHSHG(obj) {
+		fmt.Println("Object is not in HSHG.")
+		return
+	}
+
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
@@ -225,7 +230,7 @@ func (g *Grid) remove(obj *Entity) {
 	containerIndex := obj.objectContainerIndex
 	allGridObjectsIndex := obj.allGridObjectsIndex
 
-	cell := &g.allCells[hash]
+	cell := g.allCells[hash]
 
 	if len(cell.objectContainer) == 1 {
 		cell.objectContainer = cell.objectContainer[:0]
@@ -268,7 +273,12 @@ func (g *Grid) expandGrid() {
 
 	oldCellCount := len(oldCells)
 	newCellCount := oldCellCount * 4 // Quadrupling the grid size
-	newCells := make([]Cell, newCellCount)
+	newCells := make([]*Cell, newCellCount)
+
+	// Allocate new Cells and assign pointers to the newCells slice
+	for i := 0; i < newCellCount; i++ {
+		newCells[i] = &Cell{}
+	}
 
 	g.allCells = newCells
 	g.occupiedCells = nil // Reset occupied cells
@@ -276,15 +286,16 @@ func (g *Grid) expandGrid() {
 	// Update the cellSize and rehash all objects
 	g.cellSize *= 2
 
-	for _, cell := range oldOccupiedCells {
+	for _, cellPtr := range oldOccupiedCells {
+		cell := cellPtr // Dereference pointer to work with the Cell object
 		for _, obj := range cell.objectContainer {
 			// Reinsert object into the new grid
 			newHash := g.toHash(obj.min[0], obj.min[1])
 
-			targetCell := &g.allCells[newHash]
+			targetCell := g.allCells[newHash]
 			if len(targetCell.objectContainer) == 0 {
 				targetCell.occupiedCellsIndex = len(g.occupiedCells)
-				g.occupiedCells = append(g.occupiedCells, *targetCell)
+				g.occupiedCells = append(g.occupiedCells, targetCell) // Store pointer to targetCell
 			}
 
 			obj.objectContainerIndex = len(targetCell.objectContainer)
